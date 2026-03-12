@@ -4,7 +4,7 @@
  * Architecture:
  *   - Fixed 256-tick physics simulation (3.90625ms per tick)
  *   - Uncapped rendering FPS
- *   - Decoupled physics from rendering with interpolation
+ *   - Decoupled physics from rendering (interpolation planned for V2)
  *   - SDL2 + OpenGL 2.1 (compatible, will upgrade later)
  *   - Raw mouse input, no acceleration
  */
@@ -181,6 +181,19 @@ int main(int argc, char* argv[]) {
 
         game.physics_accumulator += frame_dt;
 
+        // Apply mouse look ONCE per frame, before physics ticks.
+        // Mouse delta must not be applied per-tick, otherwise sensitivity
+        // scales with the number of physics steps per frame.
+        if (!game.settings_open) {
+            float sens = input.sensitivity;
+            game.player.yaw   += input.mouse_dx * sens;
+            game.player.pitch += input.mouse_dy * sens;
+            if (game.player.pitch > 89.0f)  game.player.pitch = 89.0f;
+            if (game.player.pitch < -89.0f) game.player.pitch = -89.0f;
+            while (game.player.yaw >= 360.0f) game.player.yaw -= 360.0f;
+            while (game.player.yaw < 0.0f)    game.player.yaw += 360.0f;
+        }
+
         int physics_steps = 0;
         while (game.physics_accumulator >= PHYSICS_DT && physics_steps < MAX_PHYSICS_STEPS) {
             game_physics_tick(&input);
@@ -323,7 +336,7 @@ static void game_render(SDL_Window* window, InputState* input) {
 
     // ---- 2D HUD ----
     renderer_draw_crosshair(w, h);
-    renderer_draw_hud(w, h, game.player.health, game.player.ammo, game.player.max_ammo);
+    renderer_draw_hud(w, h, game.player.health, PLAYER_MAX_HEALTH, game.player.ammo, game.player.max_ammo);
 
     // Hit marker
     if (game.show_hit_marker) {

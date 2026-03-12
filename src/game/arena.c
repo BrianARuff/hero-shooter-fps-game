@@ -1,4 +1,5 @@
 #include "arena.h"
+#include "player.h"  // For PLAYER_HEIGHT constant
 #include <math.h>
 
 static void add_target(Arena* arena, float x, float z, float height) {
@@ -199,7 +200,7 @@ int arena_raycast_targets(Arena* arena, Ray ray, float max_dist, float* out_dist
 int arena_check_wall_collision(Arena* arena, Vec3 pos, float radius) {
     AABB player_box;
     player_box.min = vec3(pos.x - radius, 0, pos.z - radius);
-    player_box.max = vec3(pos.x + radius, 1.8f, pos.z + radius);
+    player_box.max = vec3(pos.x + radius, PLAYER_HEIGHT, pos.z + radius);
 
     for (int i = 0; i < arena->num_walls; i++) {
         if (aabb_intersect(player_box, arena->walls[i].bounds)) {

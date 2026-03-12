@@ -42,6 +42,8 @@ This compiles all `.c` files, links against SDL2 and OpenGL, and outputs `HeroSh
 
 There is no CMake or Makefile — the build is a single shell script for simplicity. This may change as the project grows.
 
+**Note:** `build.sh` contains hardcoded paths to the Zig compiler and SDL2 libraries specific to the original build environment (a Claude Cowork Linux VM). If building in a different environment, you will need to update the `ZIG`, `SDL2`, `SRC`, and `OUT` variables at the top of `build.sh` to point to your local installations. Alternatively, install Zig and SDL2 dev libraries via your system package manager and adjust paths accordingly.
+
 ---
 
 ## Project Structure
@@ -119,6 +121,8 @@ while running:
 - No mouse acceleration or smoothing — 1:1 mouse delta to aim rotation.
 - Keyboard uses SDL scancodes (hardware position, not layout-dependent).
 - Input state tracks current + previous frame for pressed/released detection.
+- **CRITICAL: Mouse look is applied ONCE per frame in the main loop, NOT inside the physics tick.** If mouse look were inside `player_update()`, sensitivity would scale with the number of physics ticks per frame (which varies). This was a bug found and fixed during QC.
+- Movement input (WASD) is safe to read inside physics ticks because it's a binary on/off state, not an accumulated delta.
 
 ### Rendering Approach
 

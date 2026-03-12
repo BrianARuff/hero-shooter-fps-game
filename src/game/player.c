@@ -42,19 +42,8 @@ Vec3 player_get_right(Player* player) {
 void player_update(Player* player, InputState* input, float dt) {
     if (!player->alive) return;
 
-    // ---- Mouse look ----
-    // Movement does NOT affect aim (per spec), so we always apply mouse input
-    float sens = input->sensitivity;
-    player->yaw   += input->mouse_dx * sens;
-    player->pitch  += input->mouse_dy * sens;
-
-    // Clamp pitch to prevent flipping
-    if (player->pitch > 89.0f)  player->pitch = 89.0f;
-    if (player->pitch < -89.0f) player->pitch = -89.0f;
-
-    // Normalize yaw to [0, 360)
-    while (player->yaw >= 360.0f) player->yaw -= 360.0f;
-    while (player->yaw < 0.0f)    player->yaw += 360.0f;
+    // NOTE: Mouse look is applied ONCE per frame in the main loop (main.c),
+    // NOT per physics tick. This prevents sensitivity from scaling with tick count.
 
     // ---- Movement ----
     Vec3 forward = player_get_forward(player);

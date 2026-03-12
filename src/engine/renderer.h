@@ -23,7 +23,7 @@ void renderer_draw_box(RenderState* state, Vec3 pos, Vec3 size, float r, float g
 void renderer_draw_floor(RenderState* state, float size, float y);
 void renderer_draw_line(RenderState* state, Vec3 from, Vec3 to, float r, float g, float b);
 void renderer_draw_crosshair(int screen_w, int screen_h);
-void renderer_draw_hud(int screen_w, int screen_h, int health, int ammo, int max_ammo);
+void renderer_draw_hud(int screen_w, int screen_h, int health, int max_health, int ammo, int max_ammo);
 void renderer_draw_text_simple(float x, float y, const char* text, float r, float g, float b);
 
 #endif // RENDERER_H

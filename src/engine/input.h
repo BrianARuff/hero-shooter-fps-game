@@ -29,14 +29,17 @@ void input_begin_frame(InputState* input);
 void input_process_event(InputState* input, SDL_Event* event);
 
 static inline int input_key_held(InputState* input, int scancode) {
+    if (scancode < 0 || scancode >= MAX_KEYS) return 0;
     return input->keys[scancode];
 }
 
 static inline int input_key_pressed(InputState* input, int scancode) {
+    if (scancode < 0 || scancode >= MAX_KEYS) return 0;
     return input->keys[scancode] && !input->keys_prev[scancode];
 }
 
 static inline int input_key_released(InputState* input, int scancode) {
+    if (scancode < 0 || scancode >= MAX_KEYS) return 0;
     return !input->keys[scancode] && input->keys_prev[scancode];
 }
 

@@ -165,7 +165,6 @@ void renderer_draw_crosshair(int screen_w, int screen_h) {
     float cy = screen_h * 0.5f;
     float gap = 4.0f;
     float length = 8.0f;
-    float thickness = 1.5f;
 
     // Crosshair lines (white with black outline for visibility)
     // Outline
@@ -263,9 +262,11 @@ static void draw_char(float x, float y, char c, float scale) {
             default: L(0,0,4,0) L(4,0,4,6) L(4,6,0,6) L(0,6,0,0) break; // Box for unknown
         }
     } else if (c >= 'a' && c <= 'z') {
-        // Render lowercase as uppercase
+        // Convert lowercase to uppercase without recursion.
+        // Recursive call would nest glBegin() which is an OpenGL error.
+        glEnd();
         draw_char(x, y, c - 32, scale);
-        glBegin(GL_LINES); // Re-open since recursive call closed it
+        return; // draw_char for uppercase already called glEnd()
     } else if (c == '/') {
         L(0,6,4,0)
     } else if (c == ':') {
@@ -300,7 +301,7 @@ void renderer_draw_text_simple(float x, float y, const char* text, float r, floa
     }
 }
 
-void renderer_draw_hud(int screen_w, int screen_h, int health, int ammo, int max_ammo) {
+void renderer_draw_hud(int screen_w, int screen_h, int health, int max_health, int ammo, int max_ammo) {
     // Switch to 2D
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -327,7 +328,7 @@ void renderer_draw_hud(int screen_w, int screen_h, int health, int ammo, int max
     glVertex2f(hbar_x, hbar_y + hbar_h);
 
     // Health bar fill
-    float health_frac = health / 200.0f; // Max health 200
+    float health_frac = (max_health > 0) ? (float)health / (float)max_health : 0.0f;
     float fill_w = hbar_w * health_frac;
     float hr = health > 100 ? 0.2f : (health > 50 ? 1.0f : 1.0f);
     float hg = health > 100 ? 0.8f : (health > 50 ? 0.8f : 0.2f);
