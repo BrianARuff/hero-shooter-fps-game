@@ -301,6 +301,145 @@ void renderer_draw_text_simple(float x, float y, const char* text, float r, floa
     }
 }
 
+void renderer_draw_gun_viewmodel(int screen_w, int screen_h, float recoil, float bob_timer, int is_reloading) {
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, screen_w, screen_h, 0, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    glDisable(GL_DEPTH_TEST);
+
+    // Gun position: bottom-right of screen
+    float base_x = screen_w * 0.65f;
+    float base_y = screen_h * 0.55f;
+
+    // Walking bob
+    float bob_x = sinf(bob_timer) * 6.0f;
+    float bob_y = fabsf(cosf(bob_timer * 2.0f)) * 4.0f;
+
+    // Recoil kick: gun moves up and back
+    float recoil_y = -recoil * 25.0f;
+    float recoil_x = recoil * 5.0f;
+
+    // Reload animation: gun drops down
+    float reload_y = 0.0f;
+    if (is_reloading) {
+        reload_y = 80.0f;
+    }
+
+    float gx = base_x + bob_x + recoil_x;
+    float gy = base_y + bob_y + recoil_y + reload_y;
+
+    // Scale gun proportional to screen
+    float scale = screen_h / 1080.0f;
+    if (scale < 0.5f) scale = 0.5f;
+
+    // ---- Draw gun body (rifle shape) ----
+    // Main barrel
+    glBegin(GL_QUADS);
+    glColor4f(0.3f, 0.3f, 0.35f, 1.0f);
+    glVertex2f(gx - 20*scale,  gy + 10*scale);
+    glVertex2f(gx + 180*scale, gy + 10*scale);
+    glVertex2f(gx + 180*scale, gy + 30*scale);
+    glVertex2f(gx - 20*scale,  gy + 30*scale);
+    glEnd();
+
+    // Upper receiver
+    glBegin(GL_QUADS);
+    glColor4f(0.25f, 0.25f, 0.3f, 1.0f);
+    glVertex2f(gx - 10*scale,  gy - 5*scale);
+    glVertex2f(gx + 120*scale, gy - 5*scale);
+    glVertex2f(gx + 120*scale, gy + 12*scale);
+    glVertex2f(gx - 10*scale,  gy + 12*scale);
+    glEnd();
+
+    // Magazine
+    glBegin(GL_QUADS);
+    glColor4f(0.2f, 0.2f, 0.25f, 1.0f);
+    glVertex2f(gx + 50*scale, gy + 28*scale);
+    glVertex2f(gx + 75*scale, gy + 28*scale);
+    glVertex2f(gx + 70*scale, gy + 80*scale);
+    glVertex2f(gx + 45*scale, gy + 80*scale);
+    glEnd();
+
+    // Grip
+    glBegin(GL_QUADS);
+    glColor4f(0.22f, 0.22f, 0.26f, 1.0f);
+    glVertex2f(gx + 5*scale,  gy + 28*scale);
+    glVertex2f(gx + 30*scale, gy + 28*scale);
+    glVertex2f(gx + 20*scale, gy + 90*scale);
+    glVertex2f(gx - 5*scale,  gy + 90*scale);
+    glEnd();
+
+    // Stock
+    glBegin(GL_QUADS);
+    glColor4f(0.28f, 0.28f, 0.32f, 1.0f);
+    glVertex2f(gx - 50*scale,  gy + 5*scale);
+    glVertex2f(gx - 15*scale,  gy + 5*scale);
+    glVertex2f(gx - 15*scale,  gy + 35*scale);
+    glVertex2f(gx - 50*scale,  gy + 25*scale);
+    glEnd();
+
+    // Muzzle tip
+    glBegin(GL_QUADS);
+    glColor4f(0.4f, 0.4f, 0.45f, 1.0f);
+    glVertex2f(gx + 175*scale, gy + 8*scale);
+    glVertex2f(gx + 200*scale, gy + 8*scale);
+    glVertex2f(gx + 200*scale, gy + 32*scale);
+    glVertex2f(gx + 175*scale, gy + 32*scale);
+    glEnd();
+
+    // Muzzle flash (when recoil is active)
+    if (recoil > 0.3f) {
+        float flash_alpha = (recoil - 0.3f) * 3.0f;
+        if (flash_alpha > 1.0f) flash_alpha = 1.0f;
+
+        float fx = gx + 200*scale;
+        float fy = gy + 20*scale;
+        float fs = 30.0f * scale * flash_alpha;
+
+        glBegin(GL_TRIANGLES);
+        glColor4f(1.0f, 0.9f, 0.3f, flash_alpha * 0.9f);
+        glVertex2f(fx, fy - fs);
+        glVertex2f(fx + fs * 1.5f, fy);
+        glVertex2f(fx, fy + fs);
+
+        glColor4f(1.0f, 0.6f, 0.1f, flash_alpha * 0.7f);
+        glVertex2f(fx, fy - fs * 0.6f);
+        glVertex2f(fx + fs * 2.0f, fy);
+        glVertex2f(fx, fy + fs * 0.6f);
+        glEnd();
+    }
+
+    // Scope/sight rail
+    glBegin(GL_QUADS);
+    glColor4f(0.15f, 0.15f, 0.18f, 1.0f);
+    glVertex2f(gx + 30*scale, gy - 8*scale);
+    glVertex2f(gx + 100*scale, gy - 8*scale);
+    glVertex2f(gx + 100*scale, gy - 3*scale);
+    glVertex2f(gx + 30*scale, gy - 3*scale);
+    glEnd();
+
+    // Edge highlights
+    glBegin(GL_LINES);
+    glColor4f(0.5f, 0.5f, 0.55f, 0.6f);
+    // Top barrel edge
+    glVertex2f(gx - 20*scale, gy + 10*scale);
+    glVertex2f(gx + 180*scale, gy + 10*scale);
+    // Bottom barrel edge
+    glVertex2f(gx - 20*scale, gy + 30*scale);
+    glVertex2f(gx + 180*scale, gy + 30*scale);
+    glEnd();
+
+    glEnable(GL_DEPTH_TEST);
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+}
+
 void renderer_draw_hud(int screen_w, int screen_h, int health, int max_health, int ammo, int max_ammo) {
     // Switch to 2D
     glMatrixMode(GL_PROJECTION);

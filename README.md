@@ -20,8 +20,10 @@ For contributor and AI agent guidelines, see [AGENTS.md](AGENTS.md).
 | Mouse | Look |
 | Left Click | Fire |
 | R | Reload |
-| F1 | Open/close settings |
-| ESC | Quit |
+| Space | Jump |
+| Ctrl | Crouch (hold) |
+| ESC | Open/close settings |
+| Alt+F4 | Quit |
 
 ---
 
@@ -52,6 +54,18 @@ For contributor and AI agent guidelines, see [AGENTS.md](AGENTS.md).
 11. **Hit markers** — Red X flash on hit, longer flash on kill. Visual feedback for successful shots.
 
 12. **Settings menu** — F1 toggles an in-game settings panel with clickable FOV slider (80-120) and mouse sensitivity slider (0.01-0.50). Mouse cursor released when settings are open.
+
+### V1.1 — Movement, Gun, & Audio (2026-03-13)
+
+13. **Settings reworked to ESC key** — ESC now opens/closes the settings menu (previously F1). Settings panel expanded with mouse direction controls (Invert X / Invert Y toggles) and master volume slider. Quit moved to Alt+F4. Mouse right now correctly moves view right by default.
+
+14. **Jump mechanics** — Space bar to jump with 7.5 m/s upward velocity and 20 m/s² gravity. On-ground detection for landing. Player cannot jump while airborne.
+
+15. **Crouch mechanics** — Hold Ctrl to crouch. Smoothly interpolates eye height from 1.6m to 1.0m. Crouch movement speed halved (2.75 m/s). Collision height reduced while crouching.
+
+16. **Gun viewmodel** — First-person rifle model rendered in screen space (bottom-right). Features walking bob animation that syncs with movement speed, recoil kick animation on firing, muzzle flash effect, and reload drop animation.
+
+17. **Procedural audio system** — Built-in audio using SDL2's audio API with procedural sound generation (no external audio files needed). Footstep sounds with alternating left/right pitch, jump whoosh, landing thud, gunshot crack with low-frequency thump, and mechanical reload clicks. 16-voice polyphonic mixing with voice stealing.
 
 ---
 

@@ -16,6 +16,8 @@ typedef struct {
     float sensitivity;           // Mouse sensitivity multiplier
     int mouse_buttons;           // Bitmask of current mouse buttons
     int mouse_buttons_prev;
+    int invert_x;                // 1 = invert horizontal mouse
+    int invert_y;                // 1 = invert vertical mouse
 
     // Window state
     int quit_requested;

@@ -25,6 +25,7 @@
 #include "util/math_utils.h"
 #include "engine/renderer.h"
 #include "engine/input.h"
+#include "engine/audio.h"
 #include "game/player.h"
 #include "game/arena.h"
 
@@ -49,6 +50,9 @@ typedef struct {
     RenderState render_state;
     float fov;
 
+    // Audio
+    AudioState audio;
+
     // Timing
     double physics_accumulator;
     Uint64 last_frame_time;
@@ -67,6 +71,10 @@ typedef struct {
 
     // Settings menu
     int settings_open;
+    int settings_mouse_prev;  // Previous frame mouse state for click detection
+
+    // Track previous on_ground for land sound
+    int prev_on_ground;
 } GameState;
 
 static GameState game;
@@ -85,7 +93,7 @@ int main(int argc, char* argv[]) {
 
     SDL_SetMainReady();
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0) {
         fprintf(stderr, "SDL init failed: %s\n", SDL_GetError());
         return 1;
     }
@@ -136,8 +144,9 @@ int main(int argc, char* argv[]) {
     printf("  Mouse   - Look\n");
     printf("  LMB     - Fire\n");
     printf("  R       - Reload\n");
-    printf("  F1      - Settings\n");
-    printf("  ESC     - Quit\n");
+    printf("  Space   - Jump\n");
+    printf("  Ctrl    - Crouch\n");
+    printf("  ESC     - Settings\n");
 
     // ---- Main loop ----
     int running = 1;
@@ -154,21 +163,21 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        // Handle window resize
-        if (input.window_resized) {
-            glViewport(0, 0, input.window_w, input.window_h);
-            game.render_state.aspect = (float)input.window_w / (float)input.window_h;
-            renderer_set_fov(&game.render_state, game.fov);
-        }
-
-        // Toggle settings
-        if (input_key_pressed(&input, SDL_SCANCODE_F1)) {
+        // Toggle settings with ESC
+        if (input_key_pressed(&input, SDL_SCANCODE_ESCAPE)) {
             game.settings_open = !game.settings_open;
             if (game.settings_open) {
                 SDL_SetRelativeMouseMode(SDL_FALSE);
             } else {
                 SDL_SetRelativeMouseMode(SDL_TRUE);
             }
+        }
+
+        // Handle window resize
+        if (input.window_resized) {
+            glViewport(0, 0, input.window_w, input.window_h);
+            game.render_state.aspect = (float)input.window_w / (float)input.window_h;
+            renderer_set_fov(&game.render_state, game.fov);
         }
 
         // ---- Fixed timestep physics ----
@@ -186,8 +195,17 @@ int main(int argc, char* argv[]) {
         // scales with the number of physics steps per frame.
         if (!game.settings_open) {
             float sens = input.sensitivity;
-            game.player.yaw   += input.mouse_dx * sens;
-            game.player.pitch += input.mouse_dy * sens;
+            float dx = input.mouse_dx;
+            float dy = input.mouse_dy;
+
+            // Apply invert settings
+            if (input.invert_x) dx = -dx;
+            if (input.invert_y) dy = -dy;
+
+            // Default: mouse right = look right, mouse down = look down
+            // In our coordinate system: positive yaw = turn left, so we negate dx
+            game.player.yaw   -= dx * sens;
+            game.player.pitch += dy * sens;
             if (game.player.pitch > 89.0f)  game.player.pitch = 89.0f;
             if (game.player.pitch < -89.0f) game.player.pitch = -89.0f;
             while (game.player.yaw >= 360.0f) game.player.yaw -= 360.0f;
@@ -223,6 +241,7 @@ int main(int argc, char* argv[]) {
         SDL_GL_SwapWindow(window);
     }
 
+    audio_shutdown(&game.audio);
     SDL_GL_DeleteContext(gl_context);
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -241,11 +260,16 @@ static void game_init(SDL_Window* window) {
     SDL_GetWindowSize(window, &w, &h);
     renderer_init(&game.render_state, game.fov, (float)w / (float)h);
 
+    // Initialize audio
+    audio_init(&game.audio);
+
     // Initialize player at arena center
     player_init(&game.player, vec3(0, PLAYER_EYE_HEIGHT, 5.0f));
 
     // Initialize arena
     arena_init(&game.arena);
+
+    game.prev_on_ground = 1;
 }
 
 static void game_physics_tick(InputState* input) {
@@ -269,6 +293,29 @@ static void game_physics_tick(InputState* input) {
         game_fire_weapon();
     }
 
+    // ---- Audio: footsteps ----
+    audio_update_footsteps(&game.audio,
+        game.player.is_walking, game.player.is_crouching, dt);
+
+    // ---- Audio: landing sound ----
+    if (game.player.on_ground && !game.prev_on_ground) {
+        audio_play_sound(&game.audio, SOUND_LAND);
+    }
+    game.prev_on_ground = game.player.on_ground;
+
+    // ---- Audio: jump sound ----
+    if (!game.settings_open &&
+        input_key_pressed(input, SDL_SCANCODE_SPACE) &&
+        game.prev_on_ground) {
+        audio_play_sound(&game.audio, SOUND_JUMP);
+    }
+
+    // ---- Audio: reload sound ----
+    if (game.player.weapon_state == WEAPON_RELOADING &&
+        game.player.reload_timer > WEAPON_RELOAD_TIME - (float)PHYSICS_DT * 1.5f) {
+        audio_play_sound(&game.audio, SOUND_RELOAD);
+    }
+
     // Update arena (target respawns, etc)
     arena_update(&game.arena, dt);
 
@@ -285,6 +332,12 @@ static void game_fire_weapon(void) {
     game.player.ammo--;
     game.player.fire_cooldown = 1.0f / WEAPON_FIRE_RATE;
     game.player.shots_fired++;
+
+    // Gun recoil animation
+    game.player.gun_recoil = 1.0f;
+
+    // Gunshot sound
+    audio_play_sound(&game.audio, SOUND_GUNSHOT);
 
     // Hitscan raycast
     Ray aim_ray = player_get_aim_ray(&game.player);
@@ -303,8 +356,7 @@ static void game_fire_weapon(void) {
 
         if (t->health <= 0) {
             t->alive = 0;
-            t->respawn_timer = 3.0f; // Respawn after 3 seconds
-            // Kill marker (longer flash)
+            t->respawn_timer = 3.0f;
             game.hit_marker_timer = 0.3f;
         }
 
@@ -335,6 +387,12 @@ static void game_render(SDL_Window* window, InputState* input) {
     }
 
     // ---- 2D HUD ----
+    // Gun viewmodel (behind crosshair)
+    renderer_draw_gun_viewmodel(w, h,
+        game.player.gun_recoil,
+        game.player.gun_bob_timer,
+        game.player.weapon_state == WEAPON_RELOADING);
+
     renderer_draw_crosshair(w, h);
     renderer_draw_hud(w, h, game.player.health, PLAYER_MAX_HEALTH, game.player.ammo, game.player.max_ammo);
 
@@ -462,28 +520,28 @@ static void draw_settings_overlay(int screen_w, int screen_h, InputState* input)
     glVertex2f(0, screen_h);
     glEnd();
 
-    float panel_x = screen_w * 0.3f;
-    float panel_y = screen_h * 0.2f;
-    float panel_w = screen_w * 0.4f;
+    float panel_x = screen_w * 0.25f;
+    float panel_y = screen_h * 0.1f;
+    float panel_w = screen_w * 0.5f;
+    float panel_h = 480.0f;
 
     // Panel background
     glBegin(GL_QUADS);
     glColor4f(0.15f, 0.15f, 0.2f, 0.95f);
     glVertex2f(panel_x, panel_y);
     glVertex2f(panel_x + panel_w, panel_y);
-    glVertex2f(panel_x + panel_w, panel_y + 300);
-    glVertex2f(panel_x, panel_y + 300);
+    glVertex2f(panel_x + panel_w, panel_y + panel_h);
+    glVertex2f(panel_x, panel_y + panel_h);
     glEnd();
 
     renderer_draw_text_simple(panel_x + 20, panel_y + 20, "SETTINGS", 1.0f, 1.0f, 1.0f);
 
-    // FOV slider
+    // ---- FOV slider ----
     renderer_draw_text_simple(panel_x + 20, panel_y + 60, "FOV:", 0.8f, 0.8f, 0.8f);
     char fov_text[32];
     snprintf(fov_text, sizeof(fov_text), "%.0f", game.fov);
     renderer_draw_text_simple(panel_x + 80, panel_y + 60, fov_text, 1.0f, 1.0f, 0.5f);
 
-    // FOV slider bar
     float slider_x = panel_x + 20;
     float slider_y = panel_y + 90;
     float slider_w = panel_w - 40;
@@ -508,7 +566,6 @@ static void draw_settings_overlay(int screen_w, int screen_h, InputState* input)
     glVertex2f(knob_x - 5, slider_y + slider_h + 3);
     glEnd();
 
-    // Handle FOV slider interaction
     int mx, my;
     Uint32 mb = SDL_GetMouseState(&mx, &my);
     if (mb & SDL_BUTTON(1)) {
@@ -521,13 +578,12 @@ static void draw_settings_overlay(int screen_w, int screen_h, InputState* input)
         }
     }
 
-    // Sensitivity
+    // ---- Sensitivity slider ----
     renderer_draw_text_simple(panel_x + 20, panel_y + 130, "SENS:", 0.8f, 0.8f, 0.8f);
     char sens_text[32];
     snprintf(sens_text, sizeof(sens_text), "%.2f", input->sensitivity);
-    renderer_draw_text_simple(panel_x + 80, panel_y + 130, sens_text, 1.0f, 1.0f, 0.5f);
+    renderer_draw_text_simple(panel_x + 90, panel_y + 130, sens_text, 1.0f, 1.0f, 0.5f);
 
-    // Sensitivity slider
     float sens_slider_y = panel_y + 160;
     glBegin(GL_QUADS);
     glColor4f(0.3f, 0.3f, 0.3f, 1.0f);
@@ -557,9 +613,114 @@ static void draw_settings_overlay(int screen_w, int screen_h, InputState* input)
         }
     }
 
-    // Instructions
-    renderer_draw_text_simple(panel_x + 20, panel_y + 220, "F1 TO CLOSE", 0.5f, 0.5f, 0.5f);
-    renderer_draw_text_simple(panel_x + 20, panel_y + 250, "ESC TO QUIT", 0.5f, 0.5f, 0.5f);
+    // ---- Mouse direction toggles ----
+    float toggle_y = panel_y + 210;
+    int mouse_just_pressed = (mb & SDL_BUTTON(1)) && !(game.settings_mouse_prev & SDL_BUTTON(1));
+
+    // Invert X toggle
+    renderer_draw_text_simple(panel_x + 20, toggle_y, "INVERT X:", 0.8f, 0.8f, 0.8f);
+    {
+        float btn_x = panel_x + 140;
+        float btn_w = 60;
+        float btn_h = 18;
+
+        glBegin(GL_QUADS);
+        if (input->invert_x) {
+            glColor4f(1.0f, 0.5f, 0.2f, 0.9f);
+        } else {
+            glColor4f(0.3f, 0.3f, 0.35f, 0.9f);
+        }
+        glVertex2f(btn_x, toggle_y - 2);
+        glVertex2f(btn_x + btn_w, toggle_y - 2);
+        glVertex2f(btn_x + btn_w, toggle_y + btn_h);
+        glVertex2f(btn_x, toggle_y + btn_h);
+        glEnd();
+
+        renderer_draw_text_simple(btn_x + 10, toggle_y + 1,
+            input->invert_x ? "ON" : "OFF",
+            1.0f, 1.0f, 1.0f);
+
+        if (mouse_just_pressed &&
+            mx >= btn_x && mx <= btn_x + btn_w &&
+            my >= toggle_y - 2 && my <= toggle_y + btn_h) {
+            input->invert_x = !input->invert_x;
+        }
+    }
+
+    // Invert Y toggle
+    float toggle_y2 = toggle_y + 35;
+    renderer_draw_text_simple(panel_x + 20, toggle_y2, "INVERT Y:", 0.8f, 0.8f, 0.8f);
+    {
+        float btn_x = panel_x + 140;
+        float btn_w = 60;
+        float btn_h = 18;
+
+        glBegin(GL_QUADS);
+        if (input->invert_y) {
+            glColor4f(1.0f, 0.5f, 0.2f, 0.9f);
+        } else {
+            glColor4f(0.3f, 0.3f, 0.35f, 0.9f);
+        }
+        glVertex2f(btn_x, toggle_y2 - 2);
+        glVertex2f(btn_x + btn_w, toggle_y2 - 2);
+        glVertex2f(btn_x + btn_w, toggle_y2 + btn_h);
+        glVertex2f(btn_x, toggle_y2 + btn_h);
+        glEnd();
+
+        renderer_draw_text_simple(btn_x + 10, toggle_y2 + 1,
+            input->invert_y ? "ON" : "OFF",
+            1.0f, 1.0f, 1.0f);
+
+        if (mouse_just_pressed &&
+            mx >= btn_x && mx <= btn_x + btn_w &&
+            my >= toggle_y2 - 2 && my <= toggle_y2 + btn_h) {
+            input->invert_y = !input->invert_y;
+        }
+    }
+
+    // Update previous mouse state for next frame
+    game.settings_mouse_prev = mb;
+
+    // ---- Volume slider ----
+    float vol_y = toggle_y2 + 45;
+    renderer_draw_text_simple(panel_x + 20, vol_y, "VOLUME:", 0.8f, 0.8f, 0.8f);
+    char vol_text[32];
+    snprintf(vol_text, sizeof(vol_text), "%.0f%%", game.audio.master_volume * 100.0f);
+    renderer_draw_text_simple(panel_x + 110, vol_y, vol_text, 1.0f, 1.0f, 0.5f);
+
+    float vol_slider_y = vol_y + 30;
+    glBegin(GL_QUADS);
+    glColor4f(0.3f, 0.3f, 0.3f, 1.0f);
+    glVertex2f(slider_x, vol_slider_y);
+    glVertex2f(slider_x + slider_w, vol_slider_y);
+    glVertex2f(slider_x + slider_w, vol_slider_y + slider_h);
+    glVertex2f(slider_x, vol_slider_y + slider_h);
+    glEnd();
+
+    float vol_frac = game.audio.master_volume;
+    float vol_knob_x = slider_x + clampf(vol_frac, 0, 1) * slider_w;
+
+    glBegin(GL_QUADS);
+    glColor4f(1.0f, 0.7f, 0.2f, 1.0f);
+    glVertex2f(vol_knob_x - 5, vol_slider_y - 3);
+    glVertex2f(vol_knob_x + 5, vol_slider_y - 3);
+    glVertex2f(vol_knob_x + 5, vol_slider_y + slider_h + 3);
+    glVertex2f(vol_knob_x - 5, vol_slider_y + slider_h + 3);
+    glEnd();
+
+    if (mb & SDL_BUTTON(1)) {
+        if (mx >= slider_x && mx <= slider_x + slider_w &&
+            my >= vol_slider_y - 10 && my <= vol_slider_y + slider_h + 10) {
+            float new_frac = (mx - slider_x) / slider_w;
+            game.audio.master_volume = clampf(new_frac, 0.0f, 1.0f);
+        }
+    }
+
+    // ---- Instructions ----
+    renderer_draw_text_simple(panel_x + 20, panel_y + panel_h - 50,
+        "ESC TO CLOSE", 0.5f, 0.5f, 0.5f);
+    renderer_draw_text_simple(panel_x + 20, panel_y + panel_h - 25,
+        "ALT+F4 TO QUIT", 0.5f, 0.5f, 0.5f);
 
     glEnable(GL_DEPTH_TEST);
     glMatrixMode(GL_PROJECTION);

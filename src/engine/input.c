@@ -6,6 +6,8 @@ void input_init(InputState* input, int window_w, int window_h) {
     input->sensitivity = 0.15f; // Reasonable default, similar to OW's "5" setting
     input->window_w = window_w;
     input->window_h = window_h;
+    input->invert_x = 0;        // Default: mouse right = look right
+    input->invert_y = 0;        // Default: mouse down = look down
 
     // Enable raw mouse input (bypasses OS acceleration)
     SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "0");
@@ -30,10 +32,7 @@ void input_process_event(InputState* input, SDL_Event* event) {
             if (event->key.keysym.scancode < MAX_KEYS) {
                 input->keys[event->key.keysym.scancode] = 1;
             }
-            // ESC to quit
-            if (event->key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-                input->quit_requested = 1;
-            }
+            // ESC is handled in main loop for settings toggle
             break;
 
         case SDL_KEYUP:

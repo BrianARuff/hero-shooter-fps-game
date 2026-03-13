@@ -6,8 +6,8 @@ set -e
 
 ZIG="/sessions/elegant-wonderful-cerf/tools/zig-linux-x86_64-0.11.0/zig"
 SDL2="/sessions/elegant-wonderful-cerf/tools/SDL2-2.30.1/x86_64-w64-mingw32"
-SRC="/sessions/elegant-wonderful-cerf/game/src"
-OUT="/sessions/elegant-wonderful-cerf/game/build"
+SRC="/sessions/elegant-wonderful-cerf/mnt/Triple A Hero Shooter/game_v1/src"
+OUT="/sessions/elegant-wonderful-cerf/mnt/Triple A Hero Shooter/game_v1/build"
 
 mkdir -p "$OUT"
 
@@ -21,6 +21,7 @@ $ZIG cc -target x86_64-windows-gnu \
     "$SRC/main.c" \
     "$SRC/engine/renderer.c" \
     "$SRC/engine/input.c" \
+    "$SRC/engine/audio.c" \
     "$SRC/game/player.c" \
     "$SRC/game/arena.c" \
     -lSDL2 \

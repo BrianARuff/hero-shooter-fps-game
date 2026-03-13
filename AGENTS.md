@@ -59,9 +59,10 @@ game_v1/
     ├── main.c               # Entry point, game loop, HUD, settings
     ├── engine/
     │   ├── input.h / input.c       # SDL2 input handling, raw mouse
-    │   └── renderer.h / renderer.c # OpenGL rendering, text, HUD drawing
+    │   ├── renderer.h / renderer.c # OpenGL rendering, text, HUD, gun viewmodel
+    │   └── audio.h / audio.c       # Procedural audio system (SDL2 audio API)
     ├── game/
-    │   ├── player.h / player.c     # Player entity, movement, weapon
+    │   ├── player.h / player.c     # Player entity, movement, jump, crouch, weapon
     │   ├── arena.h / arena.c       # Test arena, targets, walls, collision
     └── util/
         └── math_utils.h            # Vec3, Mat4, AABB, Ray, math helpers
@@ -111,9 +112,11 @@ while running:
 
 - Player movement uses acceleration + friction model (not direct velocity setting).
 - Diagonal movement is normalized to prevent speed boost.
-- The player is always on the ground in V1 (no jump/gravity yet).
 - Movement direction is computed from camera yaw only (pitch does not affect movement).
 - **Movement does not affect aim.** Mouse input is applied independently of movement state.
+- **Jump:** Space bar triggers 7.5 m/s upward velocity. Gravity at 20 m/s². Ground detection at y=0.
+- **Crouch:** Ctrl key held to crouch. Eye height smoothly interpolates to 1.0m (from 1.6m). Walk speed halved. Collision height reduced.
+- `player->foot_y` tracks the player's feet position (0 = on ground). `player->position.y` = foot_y + current_eye_height.
 
 ### Input System
 
@@ -123,6 +126,17 @@ while running:
 - Input state tracks current + previous frame for pressed/released detection.
 - **CRITICAL: Mouse look is applied ONCE per frame in the main loop, NOT inside the physics tick.** If mouse look were inside `player_update()`, sensitivity would scale with the number of physics ticks per frame (which varies). This was a bug found and fixed during QC.
 - Movement input (WASD) is safe to read inside physics ticks because it's a binary on/off state, not an accumulated delta.
+- **Mouse direction:** Default is mouse-right = look-right. `yaw -= mouse_dx * sensitivity` (negated because positive yaw = turn left in our coordinate system). Invert X/Y toggles available in settings.
+- ESC opens/closes the settings menu. Game quit is via Alt+F4 or SDL_QUIT event.
+
+### Audio System
+
+- Uses SDL2's built-in audio API (`SDL_OpenAudioDevice`) with a callback-based architecture.
+- All sounds are procedurally generated (no external audio files needed).
+- 16-voice polyphonic mixing with voice stealing (oldest voice replaced when full).
+- Audio callback runs on a separate thread — voice state modifications are wrapped in `SDL_LockAudioDevice`/`SDL_UnlockAudioDevice`.
+- Sound types: footstep (thud), jump (rising sweep), land (impact), gunshot (crack+thump), reload (clicks).
+- Footstep timing is managed by `audio_update_footsteps()` called from the physics tick.
 
 ### Rendering Approach
 
@@ -215,10 +229,15 @@ When adding a new feature, follow these steps:
 | Default FOV | 103 degrees | `main.c` |
 | FOV range | 80 - 120 degrees | `main.c` |
 | Player walk speed | 5.5 m/s | `player.h` |
+| Player crouch speed | 2.75 m/s | `player.h` |
 | Player height | 1.8 m | `player.h` |
+| Player crouch height | 1.2 m | `player.h` |
 | Player eye height | 1.6 m | `player.h` |
+| Player crouch eye height | 1.0 m | `player.h` |
 | Player collision radius | 0.3 m | `player.h` |
 | Player max health | 200 HP | `player.h` |
+| Player jump speed | 7.5 m/s | `player.h` |
+| Player gravity | 20.0 m/s² | `player.h` |
 | Weapon damage | 19 per bullet | `player.h` |
 | Weapon fire rate | 9 rounds/sec | `player.h` |
 | Weapon magazine size | 25 rounds | `player.h` |

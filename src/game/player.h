@@ -8,11 +8,16 @@
 #define PLAYER_WALK_SPEED     5.5f    // m/s - OW Soldier: 76 base speed
 #define PLAYER_HEIGHT         1.8f    // meters
 #define PLAYER_EYE_HEIGHT     1.6f    // meters (camera position)
+#define PLAYER_CROUCH_EYE_HEIGHT 1.0f // meters (crouched camera position)
+#define PLAYER_CROUCH_HEIGHT  1.2f    // meters (crouched collision height)
+#define PLAYER_CROUCH_SPEED   2.75f   // m/s (half walk speed)
 #define PLAYER_RADIUS         0.3f    // collision radius
 #define PLAYER_MAX_HEALTH     200     // Soldier: 76 has 200 HP
 #define PLAYER_ACCEL          50.0f   // Ground acceleration (snappy feel)
 #define PLAYER_FRICTION       10.0f   // Ground friction
 #define PLAYER_GRAVITY        20.0f   // m/s^2 (slightly higher than real for game feel)
+#define PLAYER_JUMP_SPEED     7.5f    // m/s initial upward velocity
+#define PLAYER_EYE_SMOOTH     15.0f   // Eye height interpolation speed
 
 // Weapon constants
 #define WEAPON_DAMAGE         19      // Per bullet (OW Heavy Pulse Rifle)
@@ -29,10 +34,16 @@ typedef enum {
 
 typedef struct {
     // Position & physics
-    Vec3 position;
+    Vec3 position;          // position.y = feet position (ground level when standing)
     Vec3 velocity;
     float yaw;              // Horizontal look angle (degrees)
     float pitch;            // Vertical look angle (degrees)
+
+    // Movement state
+    int on_ground;          // 1 if player is on the ground
+    int is_crouching;       // 1 if crouch key is held
+    float current_eye_height; // Smoothly interpolated eye height
+    float foot_y;           // Y position of player's feet
 
     // Player state
     int health;
@@ -44,6 +55,11 @@ typedef struct {
     int max_ammo;
     float fire_cooldown;    // Time until next shot
     float reload_timer;     // Time remaining for reload
+
+    // Gun viewmodel animation
+    float gun_recoil;       // Current recoil offset (0 = resting)
+    float gun_bob_timer;    // Walking bob animation timer
+    int is_walking;         // 1 if player is moving (for footstep bob)
 
     // Collision
     AABB bounds;            // Updated each physics tick
